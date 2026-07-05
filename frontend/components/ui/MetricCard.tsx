@@ -4,17 +4,39 @@ import { AlertCircle, Database } from "lucide-react";
 import SimpleBarChart from "@/components/charts/SimpleBarChart";
 import SimpleLineChart from "@/components/charts/SimpleLineChart";
 import RawDataBlock from "@/components/ui/RawDataBlock";
-import { extractSeries } from "@/lib/extract";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { extractSeries, type Extracted } from "@/lib/extract";
 import type { MetricDef } from "@/lib/metrics";
 import type { MetricEnvelope } from "@/lib/types";
 
+function fmt(n: number): string {
+  const abs = Math.abs(n);
+  const decimals = abs >= 100 || Number.isInteger(n) ? 0 : abs >= 1 ? 1 : 2;
+  return n.toLocaleString(undefined, { maximumFractionDigits: decimals });
+}
+
+function StatLine({ series }: { series: Extracted }) {
+  const vals = series.points.map((p) => p.value);
+  if (vals.length === 0) return null;
+  const latest = vals[vals.length - 1];
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return (
+    <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+      <span>
+        <span className="font-medium text-foreground">{fmt(latest)}</span> latest
+      </span>
+      {vals.length > 1 && <span>avg {fmt(avg)}</span>}
+      <span>· {series.count} pts</span>
+    </div>
+  );
+}
+
 function Body({ metric, env }: { metric: MetricDef; env: MetricEnvelope }) {
-  // Error (anything other than a clean fetch). "not_connected" is handled at page level,
-  // but keep a friendly fallback here too.
   if (!env.ok) {
     const msg = env.error === "not_connected" ? "Not connected" : env.error ?? "Unknown error";
     return (
-      <div className="flex items-start gap-2 rounded bg-amber-50 p-3 text-xs text-amber-800">
+      <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
         <AlertCircle size={14} className="mt-0.5 shrink-0" />
         <span className="break-words">{msg}</span>
       </div>
@@ -25,29 +47,32 @@ function Body({ metric, env }: { metric: MetricDef; env: MetricEnvelope }) {
 
   if (series.count === 0) {
     return (
-      <div className="flex items-center gap-2 rounded bg-gray-50 p-3 text-xs text-gray-400">
+      <div className="flex items-center gap-2 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
         <Database size={14} /> No data in range
       </div>
     );
   }
 
-  // A single numeric reading (e.g. height) — show it big.
+  // Single numeric reading (e.g. height) — show it big.
   if (metric.chart === "value" || series.points.length === 1) {
     const last = series.points[series.points.length - 1];
     return (
       <div>
-        <div className="text-3xl font-semibold text-gray-900">
-          {last ? last.value.toLocaleString() : "—"}
+        <div className="text-3xl font-semibold tracking-tight">
+          {last ? fmt(last.value) : "—"}
+          {series.unitHint && (
+            <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+              {series.unitHint}
+            </span>
+          )}
         </div>
-        <div className="mt-1 text-xs text-gray-400">
+        <div className="mt-1 text-xs text-muted-foreground">
           {series.count} point{series.count === 1 ? "" : "s"}
-          {series.valuePath ? ` · ${series.valuePath}` : ""}
         </div>
       </div>
     );
   }
 
-  // A chartable series.
   if (series.points.length >= 2) {
     return (
       <div>
@@ -56,18 +81,14 @@ function Body({ metric, env }: { metric: MetricDef; env: MetricEnvelope }) {
         ) : (
           <SimpleBarChart data={series.points} />
         )}
-        <div className="mt-1 text-xs text-gray-400">
-          {series.count} points · charting{" "}
-          <code className="text-gray-500">{series.valuePath}</code>
-        </div>
+        <StatLine series={series} />
       </div>
     );
   }
 
-  // Data exists but we couldn't pull a clean series — point the user at the raw JSON.
   return (
-    <div className="rounded bg-gray-50 p-3 text-xs text-gray-500">
-      {series.count} data point{series.count === 1 ? "" : "s"} returned — open Raw JSON to inspect.
+    <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+      {series.count} data point{series.count === 1 ? "" : "s"} — open Raw JSON to inspect.
     </div>
   );
 }
@@ -80,15 +101,21 @@ export default function MetricCard({
   env: MetricEnvelope;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-gray-800">{metric.title}</h3>
-        <span className="text-[10px] uppercase tracking-wide text-gray-400">
-          {env.record ?? ""}
-        </span>
-      </div>
-      <Body metric={metric} env={env} />
-      <RawDataBlock data={env.ok ? env.data : { error: env.error }} />
-    </div>
+    <Card className="gap-3 py-4">
+      <CardHeader className="px-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <CardTitle className="text-sm font-semibold">{metric.title}</CardTitle>
+          {env.record && (
+            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+              {env.record}
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="px-4">
+        <Body metric={metric} env={env} />
+        <RawDataBlock data={env.ok ? env.data : { error: env.error }} />
+      </CardContent>
+    </Card>
   );
 }

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, health
+from routers import auth, chat, health
 
 app = FastAPI(title="Fitbit Air Health Dashboard API", version="0.1.0")
 
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(health.router)
+app.include_router(chat.router)
 
 
 @app.get("/")
